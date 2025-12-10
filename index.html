@@ -1,0 +1,250 @@
+<!--
+  SFMC Email Template
+  - Hybrid 2- & 3-column modules
+  - AMPscript personalization + A/B/C variant assignment (persisted to DE)
+  - Dark-mode support (prefers-color-scheme) + practical fallbacks
+  - VML CTA for Outlook, retina srcset images
+  - Author: ChatGPT (SFMC-friendly template)
+  Note: Replace example image URLs, DE names, and tracking domains with production values.
+-->
+
+%%[
+
+/* ---------- AMPscript: personalization, variant selection, preheader ---------- */
+/* Protected patterns: use AttributeValue to safely pull subscriber attributes */
+SET @FirstName = AttributeValue("FirstName")
+IF EMPTY(@FirstName) THEN
+  SET @FirstName = "there"
+ENDIF
+
+/* Preheader content — you can also store in a DE field and pull it */
+SET @preheader = CONCAT("Hi ", @FirstName, " — here's a personal pick just for you.")
+
+/* A/B/C variant assignment */
+/* Option A: deterministic split using SubscriberKey hash if numeric (safer for stable splits)
+   Option B: Random(1,3) for quick split (non-deterministic)
+   We'll use Random here and persist the assignment to VariantLogDE (create this DE with fields SubscriberKey, Variant, JobID, SendID, CreatedDate) */
+
+SET @variant = Random(1,3)
+SET @variantLabel = Concat("Variant_", @variant)
+
+/* Persist variant assignment so you can analyze later */
+IF NOT EMPTY(_subscriberkey) THEN
+  /* UpsertData arguments: DEName, numberOfPrimaryKeys, pk1Name, pk1Value, fieldName1, fieldValue1, ... */
+  UpsertData("VariantLogDE", 1, "SubscriberKey", _subscriberkey, "Variant", @variant, "JobID", JobID, "SendID", SendID)
+ENDIF
+
+/* Example: product recommendation lookup from a DE "RecoDE" */
+SET @rows = LookupRows("RecoDE","SubscriberKey",_subscriberkey)
+IF RowCount(@rows) > 0 THEN
+  SET @row = Row(@rows,1)
+  SET @ProdName = Field(@row,"ProductName")
+  SET @ProdImage = Field(@row,"ProductImageURL")
+  SET @ProdURL   = Field(@row,"ProductURL")
+ELSE
+  /* Fallback */
+  SET @ProdName = "Our top pick"
+  SET @ProdImage = "https://via.placeholder.com/600x400?text=Top+Pick"
+  SET @ProdURL = "https://www.example.com"
+ENDIF
+
+/* UTM base — append variant param to CTA links */
+SET @utm_base = "utm_source=newsletter&utm_medium=email&utm_campaign=holiday_launch"
+SET @trackParam = Concat("&variant=", @variantLabel)
+
+]%%
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>SFMC Hybrid Email — Demo</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <!-- SINGLE compact style block (keeps head small to reduce Gmail clipping risk) -->
+  <style type="text/css">
+    /* Minimal reset */
+    html,body{margin:0;padding:0;background-color:#ffffff;}
+    *{box-sizing:border-box;}
+    table{border-collapse:collapse;mso-table-lspace:0pt;mso-table-rspace:0pt;}
+    img{border:0;display:block;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;max-width:100%;height:auto;}
+    a{color:inherit;text-decoration:none;}
+    body,td,th{font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%;}
+    /* Mobile stack behavior for hybrid columns */
+    .stack { display:inline-block; vertical-align:top; width:100%; }
+    @media only screen and (max-width:600px){
+      .container { width:100% !important; }
+      .stack { display:block !important; width:100% !important; }
+      .hide-mobile { display:none !important; max-height:0px !important; overflow:hidden !important; }
+      .img-full { width:100% !important; height:auto !important; }
+      .p-sm { padding:12px !important; }
+    }
+    /* Dark mode support — progressive enhancement */
+    @media (prefers-color-scheme: dark) {
+      :root { color-scheme: dark; }
+      body { background-color:#000000 !important; color:#ffffff !important; }
+      .bg-white { background-color:#111111 !important; }
+      .text-dark { color:#e6e6e6 !important; }
+      .cta { background-color:#ff8a00 !important; color:#000000 !important; }
+    }
+    /* small utility */
+    .button { display:inline-block; padding:12px 20px; border-radius:6px; text-decoration:none; font-weight:600; }
+    .preheader{display:none!important;visibility:hidden;mso-hide:all;font-size:1px;line-height:1px;color:transparent;height:0;max-height:0;max-width:0;opacity:0;overflow:hidden;}
+  </style>
+
+  <!--[if mso]>
+  <style type="text/css">
+    .fallback-font { font-family: Arial, sans-serif !important; }
+  </style>
+  <![endif]-->
+</head>
+
+<body width="100%" style="margin:0;padding:0;background-color:#ffffff;color:#111111;">
+  <!-- PREHEADER: visible only in preview panes -->
+  <span class="preheader">%%=v(@preheader)=%%</span>
+
+  <!-- Outer wrapper (centers the email) -->
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" align="center" style="background-color:#ffffff;">
+    <tr>
+      <td align="center">
+
+        <!-- Main container (max-width 600) -->
+        <table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" border="0" align="center" style="width:100%;max-width:600px;">
+          <!-- Header -->
+          <tr>
+            <td style="padding:20px 20px 10px 20px; text-align:left;" class="p-sm">
+              <!-- Logo: provide dark & light variants if possible -->
+              <!-- Use inline width/height to reserve space -->
+              <a href="https://www.example.com?%%=RedirectTo(@ProdURL)=%%" target="_blank" style="display:inline-block;">
+                <img src="https://via.placeholder.com/160x40?text=Logo" alt="Company Logo" width="160" height="40" style="display:block;">
+              </a>
+            </td>
+          </tr>
+
+          <!-- Hero (uses hybrid image + VML background for Outlook if you want full-bleed hero) -->
+          <tr>
+            <td style="padding:0 20px 20px 20px;">
+              <!-- Use a stacked hybrid table: image left / text right on desktop; stacked on mobile -->
+              <!-- We will select a module based on variant (A/B/C) using AMPscript -->
+              <!-- Variant A: 2-column hero (image left, text right) -->
+              %%[ IF @variant == 1 THEN ]%%
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td style="padding:0;">
+                      <!-- Hybrid columns -->
+                      <!-- Column 1: image -->
+                      <div style="display:inline-block; width:48%; vertical-align:top;" class="stack">
+                        <img src="https://via.placeholder.com/280x180?text=Hero+A" srcset="https://via.placeholder.com/560x360?text=Hero+A+2x 2x" alt="Hero image A" width="280" height="180" style="border-radius:8px;">
+                      </div>
+                      <!-- Column 2: text -->
+                      <div style="display:inline-block; width:4%;"></div>
+                      <div style="display:inline-block; width:48%; vertical-align:top; text-align:left;" class="stack">
+                        <h1 style="margin:0 0 8px 0;font-size:20px;line-height:26px;">Hand-picked for you, %%=ProperCase(@FirstName)=%%</h1>
+                        <p style="margin:0 0 16px 0;font-size:14px;line-height:20px;color:#555555;" class="text-dark">We thought you'd like this one — specially selected based on your recent activity.</p>
+                        <!-- CTA: VML for Outlook + HTML fallback -->
+                        <!-- VML button for Outlook -->
+                        <!--[if mso]>
+                          <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="%%=RedirectTo(Concat(@ProdURL,'?','',@utm_base,@trackParam))=%%" style="height:44px;v-text-anchor:middle;width:220px;" arcsize="8%" strokecolor="#FF6A00" fillcolor="#FF6A00">
+                            <w:anchorlock/>
+                            <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">Shop Now</center>
+                          </v:roundrect>
+                        <![endif]-->
+                        <!--[if !mso]><!-- -->
+                          <a href="%%=RedirectTo(Concat(@ProdURL,'?','',@utm_base,@trackParam))=%%" class="button" style="background:#FF6A00;color:#ffffff;border-radius:6px;display:inline-block;padding:12px 22px;font-weight:700;" target="_blank" rel="noopener noreferrer">Shop Now</a>
+                        <!--<![endif]-->
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+
+              %%[ ELSEIF @variant == 2 THEN ]%%
+                <!-- Variant B: 3-column product teaser (hybrid / collapses on mobile) -->
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td style="padding:0;">
+                      <!-- Column group (three equal columns) -->
+                      <div style="display:inline-block; width:32%; vertical-align:top;" class="stack">
+                        <img src="https://via.placeholder.com/160x120?text=Prod+1" srcset="https://via.placeholder.com/320x240?text=Prod+1+2x 2x" alt="Product 1" width="160" height="120" style="border-radius:8px;">
+                        <p style="margin:8px 0 0 0;font-size:13px;">Product One</p>
+                      </div>
+                      <div style="display:inline-block; width:2%;"></div>
+                      <div style="display:inline-block; width:32%; vertical-align:top;" class="stack">
+                        <img src="https://via.placeholder.com/160x120?text=Prod+2" srcset="https://via.placeholder.com/320x240?text=Prod+2+2x 2x" alt="Product 2" width="160" height="120" style="border-radius:8px;">
+                        <p style="margin:8px 0 0 0;font-size:13px;">Product Two</p>
+                      </div>
+                      <div style="display:inline-block; width:2%;"></div>
+                      <div style="display:inline-block; width:32%; vertical-align:top;" class="stack">
+                        <img src="https://via.placeholder.com/160x120?text=Prod+3" srcset="https://via.placeholder.com/320x240?text=Prod+3+2x 2x" alt="Product 3" width="160" height="120" style="border-radius:8px;">
+                        <p style="margin:8px 0 0 0;font-size:13px;">Product Three</p>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding:12px 0 0 0;">
+                      <a href="https://www.example.com/shop?%%=RedirectTo(Concat('',@utm_base,@trackParam))=%%" class="button" style="background:#1a73e8;color:#ffffff;border-radius:6px;display:inline-block;padding:12px 22px;font-weight:700;" target="_blank">Explore Collection</a>
+                    </td>
+                  </tr>
+                </table>
+
+              %%[ ELSE ]%%
+                <!-- Variant C: single-column hero with background (safe fallback) -->
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f7f7f7;border-radius:8px;">
+                  <tr>
+                    <td style="padding:16px;text-align:center;">
+                      <!-- Hero image (full width) -->
+                      <img src="https://via.placeholder.com/560x300?text=Hero+C" srcset="https://via.placeholder.com/1120x600?text=Hero+C+2x 2x" alt="Hero C" width="560" height="300" style="border-radius:8px;">
+                      <h2 style="font-size:20px;margin:12px 0 6px 0;">Special Selection</h2>
+                      <p style="margin:0 0 12px 0;color:#555555;">A curated selection we think you'll love.</p>
+                      <a href="%%=RedirectTo(Concat(@ProdURL,'?','',@utm_base,@trackParam))=%%" class="button" style="background:#00b894;color:#ffffff;border-radius:6px;display:inline-block;padding:12px 22px;font-weight:700;" target="_blank">View Pick</a>
+                    </td>
+                  </tr>
+                </table>
+              %%[ ENDIF ]%%
+
+            </td>
+          </tr>
+
+          <!-- Content block: personalized copy using recommendation data -->
+          <tr>
+            <td style="padding:20px; background-color:#ffffff;" class="bg-white p-sm">
+              <h3 style="margin:0 0 8px 0;font-size:18px;">Recommended for you, %%=ProperCase(@FirstName)=%%</h3>
+              <p style="margin:0 0 12px 0;color:#555555;">Based on your interests, we thought you'd like <strong>%%=v(@ProdName)=%%</strong>. Here's a quick look.</p>
+
+              <!-- 2-column hybrid product snippet -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="padding:0;">
+                    <div style="display:inline-block; width:40%; vertical-align:top;" class="stack">
+                      <img src="%%=v(@ProdImage)=%%" alt="%%=v(@ProdName)=%%" width="200" height="140" style="border-radius:6px;">
+                    </div>
+                    <div style="display:inline-block; width:4%;"></div>
+                    <div style="display:inline-block; width:56%; vertical-align:top;" class="stack">
+                      <p style="margin:0 0 8px 0;font-size:15px;"><strong>%%=v(@ProdName)=%%</strong></p>
+                      <p style="margin:0 0 12px 0;color:#777777;font-size:14px;">Short product blurb goes here. Highlight a benefit or unique detail in one short sentence.</p>
+                      <a href="%%=RedirectTo(Concat(@ProdURL,'?','',@utm_base,@trackParam))=%%" style="font-weight:700;color:#1a73e8;" target="_blank">See details →</a>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer: unsubscribe, social links, legal -->
+          <tr>
+            <td style="padding:20px 20px 40px 20px;font-size:13px;color:#888888;text-align:left;" class="p-sm">
+              <p style="margin:0 0 8px 0;">If you'd prefer not to receive emails like this, you can <a href="%%unsub_center_url%%" style="color:#1a73e8;">unsubscribe</a>.</p>
+              <p style="margin:0 0 8px 0;">Company Inc. &nbsp;|&nbsp; 123 Example St, City, Country</p>
+              <p style="margin:0;">&copy; %%=Format(Now(),"yyyy")=%% Company Inc. All rights reserved.</p>
+            </td>
+          </tr>
+
+        </table> <!-- /container -->
+
+      </td>
+    </tr>
+  </table>
+
+  <!-- Tracking pixel (SFMC will add tracking — include only if you control it) -->
+  <!-- <img src="https://tracking.example.com/pixel?e=%%=v(@someID)=%%" width="1" height="1" style="display:block" alt=""> -->
+
+</body>
+</html>
