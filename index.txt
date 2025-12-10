@@ -1,0 +1,10 @@
+Hi %%=v(@FirstName)=%%,
+
+We picked something we think you'll love: %%=v(@ProdName)=%%.
+
+See it here: %%=RedirectTo(Concat(@ProdURL,'?',@utm_base,@trackParam))=%%
+
+If you'd prefer not to receive emails like this, unsubscribe: %%unsub_center_url%%
+
+Company Inc.
+123 Example St, City, Country
